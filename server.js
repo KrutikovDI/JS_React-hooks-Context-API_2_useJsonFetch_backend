@@ -1,40 +1,79 @@
-import express from "express";
-import cors from "cors";
-import bodyParser from "body-parser";
+const http = require('http');
+const Koa = require('koa');
+const koaBody = require('koa-body');
+const Router = require('koa-router');
 
-const app = express();
+const app = new Koa();
+const router = new Router;
 
-app.use(cors());
-app.use(
-  bodyParser.json({
-    type(req) {
-      return true;
-    },
-  })
-);
-app.use(function (req, res, next) {
-  res.setHeader("Content-Type", "application/json");
-  next();
+
+app.use(koaBody({
+  urlencoded: true,
+  multipart: true,
+}));
+
+app.use((ctx, next) => {
+  const origin = ctx.request.get('Origin');
+  if (!origin) {
+    return next();
+  }
+
+  const headers = { 'Access-Control-Allow-Origin': '*', };
+
+  if (ctx.request.method !== 'OPTIONS') {
+    ctx.response.set({ ...headers });
+    try {
+      return next();
+    } catch (e) {
+      e.headers = { ...e.headers, ...headers };
+      throw e;
+    }
+  }
+
+  if (ctx.request.get('Access-Control-Request-Method')) {
+    ctx.response.set({
+      ...headers,
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH',
+    });
+
+    if (ctx.request.get('Access-Control-Request-Headers')) {
+      ctx.response.set('Access-Control-Allow-Headers', ctx.request.get('Access-Control-Request-Headers'));
+    }
+
+    ctx.response.status = 204;
+  }
 });
 
-app.get("/data", async (req, res) => {
+
+
+router.get("/data", async (ctx) => {
   console.log("запрос /data");
-  res.send(JSON.stringify({ status: "ok" }));
+  ctx.response.body = JSON.stringify({ status: "ok" });
 });
-app.get("/error", async (req, res) => {
-  res.status(500).send(JSON.stringify({ status: "Internal Error" }));
+router.get("/error", async (ctx) => {
+  ctx.response.status = 500;
+  ctx.response.body = JSON.stringify({ status: "Internal Error" });
   console.log("запрос /error");
 });
-app.get("/loading", async (req, res) => {
+router.get("/loading", async (ctx) => {
   await new Promise((resolve) => {
     setTimeout(() => {
       resolve();
     }, 5000);
   });
-  res.send(JSON.stringify({ status: "ok" }));
+  ctx.response.body = JSON.stringify({ status: "ok" });
   console.log("запрос /error");
 });
 
-const port = process.env.PORT || 7070;
-app.listen(port, () => console.log(`The server is running on port ${port}.`));
-``;
+
+app.use(router.routes())
+
+const server = http.createServer(app.callback());
+const port = 7071;
+server.listen(port, (err) => {
+    if (err) {
+      console.log(err);
+      return;
+    }
+  console.log('Server is listening to ' + port);
+});
